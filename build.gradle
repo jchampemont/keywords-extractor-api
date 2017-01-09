@@ -1,0 +1,30 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+
+group = 'com.jeanchampemont.nlp'
+version = '0.1.0-SNAPSHOT'
+
+description = "keywords-extractor-web"
+
+repositories {
+	mavenLocal()
+	mavenCentral()
+	maven {
+		url "https://jchampemont.github.io/maven-repository/maven2/"
+	}
+	maven {
+		url "https://github.com/karussell/mvnrepo/raw/master/releases/"
+	}
+}
+
+dependencies {
+	compile "com.jeanchampemont.nlp:keywords-extractor:0.1.1"
+	compile "com.sparkjava:spark-core:2.5.4"
+	compile("de.jetwick:snacktory:1.1") {
+		exclude group: "log4j"
+		exclude group: "org.slf4j", module: "slf4j-log4j12"
+	}
+	compile "com.optimaize.languagedetector:language-detector:0.6"
+	compile "com.google.code.gson:gson:2.8.0"
+	compile "org.slf4j:slf4j-simple:1.7.21"
+}
