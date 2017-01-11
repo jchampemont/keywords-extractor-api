@@ -35,6 +35,22 @@ import static spark.Spark.get;
 public class KeywordsExtractorWeb {
     private static JedisPool jedisPool;
 
+    private static HtmlFetcher fetcher = new HtmlFetcher();
+
+    private static List<LanguageProfile> languageProfiles;
+    private static LanguageDetector languageDetector;
+
+    static {
+        try {
+            languageProfiles = new LanguageProfileReader().readAllBuiltIn();
+            languageDetector = LanguageDetectorBuilder.create(NgramExtractors.standard())
+                    .withProfiles(languageProfiles)
+                    .build();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         boolean embeddedRedis = Boolean.valueOf(System.getProperty("kew.embedded-redis", "true"));
         String redisHost = "localhost";
@@ -124,22 +140,12 @@ public class KeywordsExtractorWeb {
     }
 
     private static JResult fetchArticle(String url) throws Exception {
-        HtmlFetcher fetcher = new HtmlFetcher();
         return fetcher.fetchAndExtract(url, 1000, true);
     }
 
     private static Optional<LdLocale> detectLanguage(String text) throws IOException {
-        //load all languages:
-        List<LanguageProfile> languageProfiles = new LanguageProfileReader().readAllBuiltIn();
-
-        //build language detector:
-        LanguageDetector languageDetector = LanguageDetectorBuilder.create(NgramExtractors.standard())
-                .withProfiles(languageProfiles)
-                .build();
-
         //create a text object factory
         TextObjectFactory textObjectFactory = CommonTextObjectFactories.forDetectingOnLargeText();
-
         //query:
         TextObject textObject = textObjectFactory.forText(text);
         return languageDetector.detect(textObject);
