@@ -16,19 +16,39 @@ import com.optimaize.langdetect.text.TextObject;
 import com.optimaize.langdetect.text.TextObjectFactory;
 import de.jetwick.snacktory.HtmlFetcher;
 import de.jetwick.snacktory.JResult;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Transaction;
+import redis.embedded.RedisServer;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 import static spark.Spark.exception;
 import static spark.Spark.get;
 
 public class KeywordsExtractorWeb {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        RedisServer redisServer = new RedisServer(6379);
+        redisServer.start();
         get("/keywords", (req, res) -> {
             if (req.queryParams("url") == null) {
                 throw new MissingUrlQueryParameterException();
             } else {
+                String ip = req.ip();
+                Jedis jedis = new Jedis("localhost");
+                Transaction t = jedis.multi();
+                t.zremrangeByScore(ip, 0, System.currentTimeMillis() - 60 * 1000);
+                redis.clients.jedis.Response<Set<String>> set = t.zrange(ip, 0, -1);
+                t.zadd(ip, new Long(System.currentTimeMillis()).doubleValue(), new Long(System.currentTimeMillis()).toString());
+                t.expire(ip, 60 * 60);
+                t.exec();
+
+                if (set.get().size() >= 6) {
+                    throw new RateLimiteExceededException();
+                }
+
                 HtmlFetcher fetcher = new HtmlFetcher();
                 JResult article = fetcher.fetchAndExtract(req.queryParams("url"), 1000, true);
 
@@ -74,6 +94,12 @@ public class KeywordsExtractorWeb {
             res.status(501);
             res.type("text/plain");
             res.body("unsupported or undectected language");
+        });
+
+        exception(RateLimiteExceededException.class, (exception, req, res) -> {
+            res.status(429);
+            res.type("text/plain");
+            res.body("rate limit exceeded");
         });
     }
 }

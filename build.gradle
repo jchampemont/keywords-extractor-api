@@ -27,4 +27,6 @@ dependencies {
 	compile "com.optimaize.languagedetector:language-detector:0.6"
 	compile "com.google.code.gson:gson:2.8.0"
 	compile "org.slf4j:slf4j-simple:1.7.21"
+	compile "redis.clients:jedis:2.9.0"
+	compile 'com.github.kstyrc:embedded-redis:0.6'
 }
