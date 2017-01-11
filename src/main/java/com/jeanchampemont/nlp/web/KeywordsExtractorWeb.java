@@ -5,6 +5,8 @@ import com.jeanchampemont.nlp.Keyword;
 import com.jeanchampemont.nlp.KeywordsExtractor;
 import com.jeanchampemont.nlp.KeywordsExtractorConfiguration;
 import com.jeanchampemont.nlp.StemmerLanguage;
+import com.jeanchampemont.nlp.web.exception.KeywordsExtractorException;
+import com.jeanchampemont.nlp.web.exception.KeywordsExtractorExceptionTypes;
 import com.optimaize.langdetect.LanguageDetector;
 import com.optimaize.langdetect.LanguageDetectorBuilder;
 import com.optimaize.langdetect.i18n.LdLocale;
@@ -22,6 +24,8 @@ import redis.embedded.RedisServer;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.List;
 import java.util.Set;
 
@@ -34,8 +38,19 @@ public class KeywordsExtractorWeb {
         redisServer.start();
         get("/keywords", (req, res) -> {
             if (req.queryParams("url") == null) {
-                throw new MissingUrlQueryParameterException();
+                throw new KeywordsExtractorException(KeywordsExtractorExceptionTypes.MISSING_URL);
             } else {
+                URL url = null;
+                try {
+                    url = new URL(req.queryParams("url"));
+                } catch (MalformedURLException e) {
+                    //does nothing except url stays null, see below
+                }
+
+                if (url == null || (!url.getProtocol().equalsIgnoreCase("http") && !url.getProtocol().equalsIgnoreCase("https"))) {
+                    throw new KeywordsExtractorException(KeywordsExtractorExceptionTypes.MALFORMED_URL);
+                }
+
                 String ip = req.ip();
                 Jedis jedis = new Jedis("localhost");
                 Transaction t = jedis.multi();
@@ -46,11 +61,11 @@ public class KeywordsExtractorWeb {
                 t.exec();
 
                 if (set.get().size() >= 6) {
-                    throw new RateLimiteExceededException();
+                    throw new KeywordsExtractorException(KeywordsExtractorExceptionTypes.RATE_LIMIT_EXCEEDED);
                 }
 
                 HtmlFetcher fetcher = new HtmlFetcher();
-                JResult article = fetcher.fetchAndExtract(req.queryParams("url"), 1000, true);
+                JResult article = fetcher.fetchAndExtract(url.toString(), 1000, true);
 
                 //load all languages:
                 List<LanguageProfile> languageProfiles = new LanguageProfileReader().readAllBuiltIn();
@@ -68,7 +83,7 @@ public class KeywordsExtractorWeb {
                 Optional<LdLocale> lang = languageDetector.detect(textObject);
 
                 if (!lang.isPresent() || (!"fr".equals(lang.get().getLanguage()) && !"en".equals(lang.get().getLanguage()))) {
-                    throw new UnsupportedOrUndetectedLanguageException();
+                    throw new KeywordsExtractorException(KeywordsExtractorExceptionTypes.UNSUPPORTED_LANGUAGE);
                 }
                 StemmerLanguage language = null;
                 if ("fr".equals(lang.get().getLanguage())) {
@@ -84,22 +99,11 @@ public class KeywordsExtractorWeb {
             }
         }, new JsonTransformer());
 
-        exception(MissingUrlQueryParameterException.class, (exception, req, res) -> {
-            res.status(400);
+        exception(KeywordsExtractorException.class, (e, req, res) -> {
+            KeywordsExtractorException ex = (KeywordsExtractorException) e;
             res.type("text/plain");
-            res.body("missing url query parameter");
-        });
-
-        exception(UnsupportedOrUndetectedLanguageException.class, (exception, req, res) -> {
-            res.status(501);
-            res.type("text/plain");
-            res.body("unsupported or undectected language");
-        });
-
-        exception(RateLimiteExceededException.class, (exception, req, res) -> {
-            res.status(429);
-            res.type("text/plain");
-            res.body("rate limit exceeded");
+            res.status(ex.getType().getStatusCode());
+            res.body(ex.getType().getMessage());
         });
     }
 }
