@@ -1,5 +1,11 @@
+plugins {
+	id "com.github.johnrengelman.shadow" version "1.2.4"
+}
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'application'
+
+mainClassName = 'com.jeanchampemont.nlp.web.KeywordsExtractorWeb'
 
 group = 'com.jeanchampemont.nlp'
 version = '0.1.0-SNAPSHOT'
