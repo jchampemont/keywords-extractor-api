@@ -19,9 +19,7 @@ import com.optimaize.langdetect.text.TextObject;
 import com.optimaize.langdetect.text.TextObjectFactory;
 import de.jetwick.snacktory.HtmlFetcher;
 import de.jetwick.snacktory.JResult;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Response;
-import redis.clients.jedis.Transaction;
+import redis.clients.jedis.*;
 import redis.embedded.RedisServer;
 
 import java.io.ByteArrayInputStream;
@@ -35,9 +33,23 @@ import static spark.Spark.exception;
 import static spark.Spark.get;
 
 public class KeywordsExtractorWeb {
+    private static JedisPool jedisPool;
+
     public static void main(String[] args) throws IOException {
-        RedisServer redisServer = new RedisServer(6379);
-        redisServer.start();
+        boolean embeddedRedis = Boolean.valueOf(System.getProperty("kew.embedded-redis", "true"));
+        String redisHost = "localhost";
+        int redisPort = 6379;
+
+        if (embeddedRedis) {
+            RedisServer redisServer = new RedisServer(6379);
+            redisServer.start();
+        } else {
+            redisHost = System.getProperty("kew.redis-host");
+            redisPort = Integer.parseInt(System.getProperty("kew.redis-port", "6379"));
+        }
+
+        jedisPool = new JedisPool(new JedisPoolConfig(), redisHost, redisPort);
+
         get("/keywords", (req, res) -> {
             String url = req.queryParams("url");
             if (url == null) {
@@ -94,20 +106,21 @@ public class KeywordsExtractorWeb {
     private static boolean isRateLimitExceeded(String ip, Long now) {
         boolean rateLimitExceeded = false;
 
-        Jedis jedis = new Jedis("localhost");
+        try (Jedis jedis = jedisPool.getResource()) {
 
-        Transaction t = jedis.multi();
-        t.zremrangeByScore(ip, 0, now - 60 * 1000);
-        Response<Set<String>> set = t.zrange(ip, 0, -1);
-        t.zadd(ip, new Long(now).doubleValue(), new Long(now).toString());
-        t.expire(ip, 60);
-        t.exec();
+            Transaction t = jedis.multi();
+            t.zremrangeByScore(ip, 0, now - 60 * 1000);
+            Response<Set<String>> set = t.zrange(ip, 0, -1);
+            t.zadd(ip, new Long(now).doubleValue(), new Long(now).toString());
+            t.expire(ip, 60);
+            t.exec();
 
-        if (set.get().size() >= 6) {
-            rateLimitExceeded = true;
+            if (set.get().size() >= 6) {
+                rateLimitExceeded = true;
+            }
+
+            return rateLimitExceeded;
         }
-
-        return rateLimitExceeded;
     }
 
     private static JResult fetchArticle(String url) throws Exception {
