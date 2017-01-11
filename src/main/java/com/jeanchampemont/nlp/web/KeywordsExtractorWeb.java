@@ -51,6 +51,10 @@ public class KeywordsExtractorWeb {
         }
     }
 
+    private static int rateLimitMaxRequest;
+
+    private static int rateLimitTimeFrameInSeconds;
+
     public static void main(String[] args) throws IOException {
         boolean embeddedRedis = Boolean.valueOf(System.getProperty("kew.embedded-redis", "true"));
         String redisHost = "localhost";
@@ -65,6 +69,9 @@ public class KeywordsExtractorWeb {
         }
 
         jedisPool = new JedisPool(new JedisPoolConfig(), redisHost, redisPort);
+
+        rateLimitMaxRequest = Integer.valueOf(System.getProperty("kew.rate-limit.max-request", "6"));
+        rateLimitTimeFrameInSeconds = Integer.valueOf(System.getProperty("kew.rate-limit.time-frame-seconds", "60"));
 
         get("/keywords", (req, res) -> {
             String url = req.queryParams("url");
@@ -125,13 +132,13 @@ public class KeywordsExtractorWeb {
         try (Jedis jedis = jedisPool.getResource()) {
 
             Transaction t = jedis.multi();
-            t.zremrangeByScore(ip, 0, now - 60 * 1000);
+            t.zremrangeByScore(ip, 0, now - rateLimitTimeFrameInSeconds * 1000);
             Response<Set<String>> set = t.zrange(ip, 0, -1);
             t.zadd(ip, new Long(now).doubleValue(), new Long(now).toString());
-            t.expire(ip, 60);
+            t.expire(ip, rateLimitTimeFrameInSeconds);
             t.exec();
 
-            if (set.get().size() >= 6) {
+            if (set.get().size() >= rateLimitMaxRequest) {
                 rateLimitExceeded = true;
             }
 
