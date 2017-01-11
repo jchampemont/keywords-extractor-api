@@ -1,19 +1,19 @@
-package com.jeanchampemont.nlp.web;
+package com.jeanchampemont.nlp.web.bean;
 
 import com.jeanchampemont.nlp.Keyword;
 import de.jetwick.snacktory.JResult;
 
 import java.util.List;
 
-public class Response {
+public class ExtractedKeywords {
     private List<Keyword> keywords;
 
     private JResult article;
 
-    public Response() {
+    public ExtractedKeywords() {
     }
 
-    public Response(List<Keyword> keywords, JResult article) {
+    public ExtractedKeywords(List<Keyword> keywords, JResult article) {
         this.keywords = keywords;
         this.article = article;
     }

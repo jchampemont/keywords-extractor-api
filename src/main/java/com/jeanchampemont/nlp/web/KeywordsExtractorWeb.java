@@ -5,6 +5,7 @@ import com.jeanchampemont.nlp.Keyword;
 import com.jeanchampemont.nlp.KeywordsExtractor;
 import com.jeanchampemont.nlp.KeywordsExtractorConfiguration;
 import com.jeanchampemont.nlp.StemmerLanguage;
+import com.jeanchampemont.nlp.web.bean.ExtractedKeywords;
 import com.jeanchampemont.nlp.web.exception.KeywordsExtractorException;
 import com.jeanchampemont.nlp.web.exception.KeywordsExtractorExceptionTypes;
 import com.optimaize.langdetect.LanguageDetector;
@@ -95,7 +96,7 @@ public class KeywordsExtractorWeb {
                 List<Keyword> keywords = extractor.extract(new ByteArrayInputStream(article.getText().getBytes()));
                 res.status(200);
                 res.type("application/json");
-                return new Response(keywords, article);
+                return new ExtractedKeywords(keywords, article);
             }
         }, new JsonTransformer());
 
